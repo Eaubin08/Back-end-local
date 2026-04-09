@@ -1,0 +1,5 @@
+{
+  "name": "Obsidia UI",
+  "description": "A high-fidelity interface for the Obsidia OS ecosystem, featuring system specifications, real-time telemetry, and advanced trajectory engines.",
+  "requestFramePermissions": []
+}
