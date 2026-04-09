@@ -2,8 +2,68 @@ import express from "express";
 import { createServer as createViteServer } from "vite";
 import path from "path";
 import fs from "fs";
+import crypto from "crypto";
 
-// __filename and __dirname are not used
+// --- Merkle Tree Implementation ---
+class MerkleTree {
+  leaves: string[];
+  layers: string[][];
+
+  constructor(leaves: string[]) {
+    this.leaves = leaves.map(l => this.hash(l));
+    this.layers = [this.leaves];
+    this.createHashes(this.leaves);
+  }
+
+  hash(data: string): string {
+    return crypto.createHash("sha256").update(data).digest("hex");
+  }
+
+  createHashes(nodes: string[]) {
+    if (nodes.length <= 1) return;
+    const layer: string[] = [];
+    for (let i = 0; i < nodes.length; i += 2) {
+      const left = nodes[i];
+      const right = nodes[i + 1] || left;
+      layer.push(this.hash(left + right));
+    }
+    this.layers.push(layer);
+    this.createHashes(layer);
+  }
+
+  getRoot(): string {
+    return this.layers[this.layers.length - 1][0] || "";
+  }
+
+  getProof(index: number): string[] {
+    const proof: string[] = [];
+    let layerIndex = index;
+    for (let i = 0; i < this.layers.length - 1; i++) {
+      const layer = this.layers[i];
+      const isRightNode = layerIndex % 2;
+      const pairIndex = isRightNode ? layerIndex - 1 : layerIndex + 1;
+      if (pairIndex < layer.length) {
+        proof.push(layer[pairIndex]);
+      } else {
+        proof.push(layer[layerIndex]);
+      }
+      layerIndex = Math.floor(layerIndex / 2);
+    }
+    return proof;
+  }
+}
+
+// --- System Engine ---
+interface DecisionTicket {
+  id: string;
+  verdict: "BLOCK" | "HOLD" | "ALLOW";
+  risk: number;
+  uncertainty: number;
+  timestamp: number;
+  signature_kernel: string;
+}
+
+const auditLog: DecisionTicket[] = [];
 
 async function startServer() {
   const app = express();
@@ -130,11 +190,50 @@ async function startServer() {
   });
 
   app.get("/api/status", (req, res) => {
+    const tree = new MerkleTree(auditLog.map(t => JSON.stringify(t)));
     res.json({
       kernel: "ACTIVE",
       reflex: "NOMINAL",
       quantum: "STABLE",
       world: "SYNCED",
+      merkle_root: tree.getRoot(),
+      audit_count: auditLog.length
+    });
+  });
+
+  app.post("/api/ingest", (req, res) => {
+    const { risk, uncertainty } = req.body;
+    
+    let verdict: "BLOCK" | "HOLD" | "ALLOW" = "ALLOW";
+    if (risk > 0.8) verdict = "BLOCK";
+    else if (uncertainty > 0.5) verdict = "HOLD";
+
+    const ticket: DecisionTicket = {
+      id: `TKT-${Date.now()}-${Math.floor(Math.random() * 1000)}`,
+      verdict,
+      risk,
+      uncertainty,
+      timestamp: Date.now(),
+      signature_kernel: crypto.randomBytes(16).toString("hex")
+    };
+
+    auditLog.push(ticket);
+    
+    const tree = new MerkleTree(auditLog.map(t => JSON.stringify(t)));
+    const proof = tree.getProof(auditLog.length - 1);
+
+    res.json({
+      ticket,
+      merkle_root: tree.getRoot(),
+      proof
+    });
+  });
+
+  app.get("/api/audit", (req, res) => {
+    const tree = new MerkleTree(auditLog.map(t => JSON.stringify(t)));
+    res.json({
+      logs: auditLog,
+      merkle_root: tree.getRoot()
     });
   });
 

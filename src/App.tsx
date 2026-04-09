@@ -75,9 +75,22 @@ export default function App() {
     fetchExplorer();
     fetchSystem();
     fetchStatus();
-    const interval = setInterval(fetchStatus, 2000);
+    fetchAudit();
+    const interval = setInterval(() => {
+      fetchStatus();
+    }, 2000);
     return () => clearInterval(interval);
   }, []);
+
+  const fetchAudit = async () => {
+    try {
+      const res = await fetch('/api/audit');
+      const data = await res.json();
+      setLogs(data.logs.reverse());
+    } catch (e) {
+      console.error('Audit fetch failed', e);
+    }
+  };
 
   useEffect(() => {
     const fetchActiveSpec = async () => {
@@ -430,13 +443,13 @@ Status: ISOLATED`,
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          raw_data: { risk: inputRisk, uncertainty: inputUncertainty },
-          input_channel: 'Surface Opératoire',
-          reception_time: new Date().toISOString()
+          risk: inputRisk,
+          uncertainty: inputUncertainty
         })
       });
-      const ticket = await res.json();
-      setLogs(prev => [ticket, ...prev]);
+      const data = await res.json();
+      setLogs(prev => [data.ticket, ...prev]);
+      fetchStatus();
     } catch (e) {
       console.error('Ingest failed', e);
     } finally {
@@ -648,27 +661,30 @@ Status: ISOLATED`,
                           <div className="flex justify-between items-start mb-3">
                             <div className="flex items-center gap-2">
                               <div className={`w-1.5 h-1.5 rounded-full ${
-                                ticket.decision.verdict === 'BLOCK' ? 'bg-red-500' :
-                                ticket.decision.verdict === 'HOLD' ? 'bg-yellow-500' :
+                                ticket.verdict === 'BLOCK' ? 'bg-red-500' :
+                                ticket.verdict === 'HOLD' ? 'bg-yellow-500' :
                                 'bg-green-500'
                               }`} />
-                              <span className="text-[10px] font-bold text-orange-500 tracking-tighter">{ticket.decision.signature_kernel}</span>
+                              <span className="text-[10px] font-bold text-orange-500 tracking-tighter">{ticket.signature_kernel}</span>
                             </div>
                             <span className={`text-[9px] px-2 py-0.5 rounded font-bold uppercase tracking-widest ${
-                              ticket.decision.verdict === 'BLOCK' ? 'bg-red-900/30 text-red-500' :
-                              ticket.decision.verdict === 'HOLD' ? 'bg-yellow-900/30 text-yellow-500' :
+                              ticket.verdict === 'BLOCK' ? 'bg-red-900/30 text-red-500' :
+                              ticket.verdict === 'HOLD' ? 'bg-yellow-900/30 text-yellow-500' :
                               'bg-green-900/30 text-green-500'
                             }`}>
-                              {ticket.decision.verdict}
+                              {ticket.verdict}
                             </span>
                           </div>
-                          <div className="text-[11px] text-gray-300 mb-3 pl-3.5 border-l border-[#222]">{ticket.decision.reason}</div>
+                          <div className="text-[11px] text-gray-300 mb-3 pl-3.5 border-l border-[#222]">
+                            Risk: {(ticket.risk * 100).toFixed(0)}% | Uncertainty: {(ticket.uncertainty * 100).toFixed(0)}%
+                          </div>
                           <div className="flex flex-wrap gap-1.5 pl-3.5">
-                            {ticket.full_trace.map((t: string, i: number) => (
-                              <span key={i} className="text-[8px] bg-[#1a1a1a] px-2 py-0.5 rounded text-gray-500 uppercase">
-                                {t}
-                              </span>
-                            ))}
+                            <span className="text-[8px] bg-[#1a1a1a] px-2 py-0.5 rounded text-gray-500 uppercase">
+                              ID: {ticket.id}
+                            </span>
+                            <span className="text-[8px] bg-[#1a1a1a] px-2 py-0.5 rounded text-gray-500 uppercase">
+                              SIG: {ticket.signature_kernel.substring(0, 8)}...
+                            </span>
                           </div>
                         </motion.div>
                       ))}
@@ -1352,7 +1368,10 @@ Status: ISOLATED`,
                 <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
                   <div className="bg-[#111] border border-[#1a1a1a] rounded-lg overflow-hidden shadow-2xl flex flex-col">
                     <div className="p-4 border-b border-[#1a1a1a] bg-[#151515] flex justify-between items-center">
-                      <span className="text-[10px] uppercase font-bold tracking-widest">Full Audit Trace (OS4)</span>
+                      <div className="flex flex-col">
+                        <span className="text-[10px] uppercase font-bold tracking-widest">Merkle Audit Trace (OS4)</span>
+                        <span className="text-[8px] text-orange-500 font-mono mt-1">ROOT: {status.merkle_root || '0x000...'}</span>
+                      </div>
                       <Clock className="w-4 h-4 text-gray-600" />
                     </div>
                     <div className="flex-1 overflow-y-auto custom-scrollbar divide-y divide-[#1a1a1a]">
@@ -1365,27 +1384,22 @@ Status: ISOLATED`,
                         <div key={idx} className="p-6 hover:bg-[#151515] transition-colors">
                           <div className="flex justify-between items-start mb-4">
                             <div className="space-y-1">
-                              <p className="text-[10px] text-orange-500 font-bold uppercase tracking-widest">{ticket.decision.id}</p>
-                              <p className="text-[9px] text-gray-600">{new Date(ticket.decision.timestamp).toLocaleString()}</p>
+                              <p className="text-[10px] text-orange-500 font-bold uppercase tracking-widest">{ticket.id}</p>
+                              <p className="text-[9px] text-gray-600">{new Date(ticket.timestamp).toLocaleString()}</p>
                             </div>
                             <span className={`text-[10px] px-3 py-1 rounded font-bold uppercase tracking-widest ${
-                              ticket.decision.verdict === 'BLOCK' ? 'bg-red-900/30 text-red-500' :
-                              ticket.decision.verdict === 'HOLD' ? 'bg-yellow-900/30 text-yellow-500' :
+                              ticket.verdict === 'BLOCK' ? 'bg-red-900/30 text-red-500' :
+                              ticket.verdict === 'HOLD' ? 'bg-yellow-900/30 text-yellow-500' :
                               'bg-green-900/30 text-green-500'
                             }`}>
-                              {ticket.decision.verdict}
+                              {ticket.verdict}
                             </span>
                           </div>
                           <div className="space-y-4">
                             <div>
-                              <p className="text-[9px] text-gray-600 uppercase mb-2">Trace Sequence</p>
-                              <div className="space-y-1.5">
-                                {ticket.full_trace.map((t: string, i: number) => (
-                                  <div key={i} className="flex items-center gap-3 text-[11px] text-gray-400">
-                                    <div className="w-1 h-1 rounded-full bg-orange-500/30" />
-                                    {t}
-                                  </div>
-                                ))}
+                              <p className="text-[9px] text-gray-600 uppercase mb-2">Cryptographic Signature</p>
+                              <div className="p-2 bg-black rounded border border-[#222] font-mono text-[9px] text-orange-400 break-all">
+                                {ticket.signature_kernel}
                               </div>
                             </div>
                           </div>

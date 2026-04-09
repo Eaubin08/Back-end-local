@@ -1,4 +1,4 @@
-import { RealEvent, DecisionTicket, SovereignCase, SovereignDecision, Verdict } from '../../runtime/contracts/core';
+import { RealEvent, DecisionTicket, SovereignCase, Verdict } from '../../runtime/contracts/core';
 import { KernelEngine } from '../../runtime/os0_core/kernel/engine';
 import { NeedsEngineState } from '../../runtime/os0_core/statuses/needs';
 import { ReflexState } from '../../runtime/os0_core/statuses/reflex';
